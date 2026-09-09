@@ -300,3 +300,15 @@ go run ./cmd/main.go -e
 
 This will create a new .csv file with all headers in the same directory as the database file.
 Commit your changes and create a pull request with the new database file.
+
+### Railway persistence
+
+Mount a persistent volume at `/mnt/store` and set
+`BHS_DB_SQLITE_FILE_PATH=/mnt/store/blockheaders.db`. The default
+`./data/blockheaders.db` lives in the container and is lost when Railway replaces
+it. Restore an existing database with SQLite's backup API before changing the
+path; keep the backup until the restored service has been verified.
+
+After deployment, check `/api/v1/network/peer/count` and
+`/api/v1/chain/tip/longest`. An HTTP response alone does not establish that header
+sync is current. Mainnet peer discovery uses the Bitcoin SV Node DNS seeds.

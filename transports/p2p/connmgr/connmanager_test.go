@@ -690,3 +690,41 @@ out:
 	cmgr.Stop()
 	cmgr.Wait()
 }
+
+// Exhausting retries for one address must replace it, not stop peer discovery.
+func TestBannedAddressReplacesConnection(t *testing.T) {
+	log := zerolog.Nop()
+	requested := make(chan struct{}, 1)
+	banned := make(chan string, 1)
+	cm, err := New(&Config{
+		Logger: &log,
+		Dial:   mockDialer,
+		GetNewAddress: func() (net.Addr, error) {
+			requested <- struct{}{}
+			return &net.TCPAddr{IP: net.ParseIP("127.0.0.2"), Port: 8333}, nil
+		},
+		BanAddress: func(addr string) { banned <- addr },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cm.cfg.TargetOutbound = 0
+	cm.Start()
+	defer func() { cm.Stop(); cm.Wait() }()
+	addr := &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 8333}
+	cm.failedAttempts[addr.String()] = maxFailedAttempts - 1
+	cm.registerFailedConnectionTo(&ConnReq{Addr: addr})
+	select {
+	case got := <-banned:
+		if got != addr.String() {
+			t.Fatalf("banned %s", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("failed address was not banned")
+	}
+	select {
+	case <-requested:
+	case <-time.After(time.Second):
+		t.Fatal("banning a peer stopped replacement discovery")
+	}
+}
