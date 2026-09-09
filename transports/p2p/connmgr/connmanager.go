@@ -269,6 +269,8 @@ func (cm *ConnManager) registerFailedConnectionTo(c *ConnReq) {
 	cm.incAddrConnAttempt(c.Addr.String())
 	if cm.isAddressConnectionAttemptsExceeded(c.Addr.String()) {
 		cm.cfg.BanAddress(c.Addr.String())
+		// A banned address must not permanently consume an outbound connection slot.
+		go cm.NewConnReq()
 		return
 	}
 	go cm.NewConnReq()
